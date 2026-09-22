@@ -1,0 +1,1872 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PinLab — симулятор платы Arduino Uno</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a1428;
+    --panel:#0f1d38;
+    --panel-2:#152547;
+    --pcb-trace:rgba(100,160,255,0.08);
+    --gold:#c9a53f;
+    --gold-bright:#f0cf72;
+    --text:#e6eefc;
+    --text-dim:#8ba3c7;
+    --text-dimmer:#5a6f94;
+    --accent:#4a9eff;
+    --accent-dim:#2a5a9e;
+    --ok:#5fd48a;
+    --danger:#ff6b5e;
+    --mono:'JetBrains Mono',ui-monospace,Consolas,monospace;
+    --display:'Space Grotesk',system-ui,sans-serif;
+    --radius:3px;
+  }
+  body.light{
+    --bg:#eaf2fc;
+    --panel:#ffffff;
+    --panel-2:#eef5ff;
+    --text:#0a1f3d;
+    --text-dim:#3a5a8a;
+    --text-dimmer:#7a95b8;
+    --accent:#1976d2;
+    --accent-dim:#0d47a1;
+    --danger:#d64535;
+    background-image:
+      linear-gradient(rgba(25,118,210,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(25,118,210,0.06) 1px, transparent 1px);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--display);
+    min-height:100vh;
+    background-image:
+      linear-gradient(var(--pcb-trace) 1px, transparent 1px),
+      linear-gradient(90deg, var(--pcb-trace) 1px, transparent 1px);
+    background-size:28px 28px;
+    transition:background .3s, color .3s;
+  }
+  ::selection{background:var(--accent-dim);color:#fff;}
+
+  header{
+    display:flex;align-items:center;gap:14px;
+    padding:12px 20px;
+    border-bottom:1px solid #1a2d52;
+    background:rgba(10,20,40,0.92);
+    position:sticky;top:0;z-index:20;
+    flex-wrap:wrap;
+    transition:background .3s, border-color .3s;
+  }
+  body.light header{background:rgba(255,255,255,0.94);border-bottom:1px solid #c0d4ec;}
+  .brand{display:flex;align-items:center;gap:10px;margin-right:auto;}
+  .brand .plug{font-size:22px;filter:drop-shadow(0 0 6px rgba(74,158,255,0.6));}
+  .brand h1{font-size:17px;font-weight:600;margin:0;letter-spacing:0.01em;}
+  .brand p{margin:0;font-size:11.5px;color:var(--text-dim);}
+
+  .theme-toggle{
+    display:flex;align-items:center;gap:6px;
+    padding:6px 10px;border-radius:20px;
+    background:var(--panel-2);border:1px solid #1e3460;
+    cursor:pointer;font-size:13px;
+    transition:background .2s, border-color .2s;
+    user-select:none;
+  }
+  body.light .theme-toggle{border-color:#a8c8e8;}
+  .theme-toggle:hover{border-color:var(--accent);}
+  .theme-toggle .icon{font-size:15px;line-height:1;}
+
+  .status-dot{
+    width:9px;height:9px;border-radius:50%;
+    background:var(--text-dimmer);
+    box-shadow:0 0 0 3px rgba(74,158,255,0.08);
+    transition:background .2s, box-shadow .2s;
+  }
+  .status-dot.running{background:var(--ok);box-shadow:0 0 8px 2px rgba(95,212,138,0.55);}
+  .status-dot.error{background:var(--danger);box-shadow:0 0 8px 2px rgba(255,107,94,0.55);}
+  .status-wrap{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim);font-family:var(--mono);}
+
+  button{font-family:var(--display);cursor:pointer;border:none;}
+  .btn{
+    padding:9px 14px;border-radius:var(--radius);
+    font-size:13px;font-weight:600;
+    background:var(--panel-2);color:var(--text);
+    border:1px solid #1e3460;
+    transition:border-color .15s, transform .1s, background .3s, color .3s;
+  }
+  body.light .btn{border-color:#a8c8e8;}
+  .btn:hover{border-color:var(--accent);}
+  .btn:active{transform:translateY(1px);}
+  .btn-run{background:var(--accent);color:#04101f;border-color:var(--accent);}
+  .btn-run:hover{background:#6ab4ff;}
+  .btn-run:disabled{opacity:0.4;cursor:not-allowed;transform:none;}
+  .btn-stop{background:transparent;color:var(--danger);border-color:#4a2a26;}
+  .btn-stop:hover{border-color:var(--danger);}
+  .btn-stop:disabled{opacity:0.35;cursor:not-allowed;}
+  .btn-icon{padding:8px 10px;font-size:14px;line-height:1;}
+
+  select{
+    background:var(--panel-2);color:var(--text);
+    border:1px solid #1e3460;border-radius:var(--radius);
+    padding:8px 10px;font-family:var(--display);font-size:12.5px;
+    transition:background .3s, color .3s, border-color .3s;
+  }
+  body.light select{border-color:#a8c8e8;}
+
+  main{
+    display:grid;
+    grid-template-columns:minmax(340px,1.15fr) minmax(360px,1fr);
+    gap:18px;
+    padding:20px;
+    align-items:start;
+  }
+  @media (max-width:960px){
+    main{grid-template-columns:1fr;}
+  }
+  .col{display:flex;flex-direction:column;gap:18px;min-width:0;}
+
+  .panel{
+    background:var(--panel);
+    border:1px solid #1a2d52;
+    border-radius:6px;
+    overflow:hidden;
+    transition:background .3s, border-color .3s;
+  }
+  body.light .panel{border-color:#c0d4ec;}
+  .panel-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:11px 16px;
+    border-bottom:1px solid #1a2d52;
+    font-family:var(--mono);
+    font-size:11.5px;
+    color:var(--text-dim);
+    letter-spacing:0.02em;
+    transition:border-color .3s;
+    gap:10px;flex-wrap:wrap;
+  }
+  body.light .panel-head{border-bottom-color:#c0d4ec;}
+  .panel-body{padding:16px;}
+
+  /* ============================================================ */
+  /* ================  ARDUINO UNO BOARD  ======================= */
+  /* ============================================================ */
+  .board{
+    background:
+      linear-gradient(160deg,#1e6aad 0%,#155288 45%,#0f3d6b 100%);
+    border:1px solid #0a2e50;
+    border-radius:10px;
+    padding:16px;
+    position:relative;
+    box-shadow:
+      inset 0 0 100px rgba(0,0,0,0.35),
+      inset 0 2px 0 rgba(255,255,255,0.08),
+      0 8px 24px rgba(0,0,0,0.6);
+    overflow:hidden;
+    min-height:620px;
+    isolation:isolate;
+  }
+  /* Solder mask texture (dots) */
+  .board::before{
+    content:"";position:absolute;inset:0;border-radius:10px;
+    background-image:radial-gradient(circle at 1px 1px, rgba(255,255,255,0.08) 1px, transparent 1px);
+    background-size:8px 8px;pointer-events:none;z-index:1;
+  }
+  /* PCB traces — шелкография */
+  .board::after{
+    content:"";position:absolute;inset:0;border-radius:10px;
+    background-image:
+      linear-gradient(90deg, transparent 0, transparent calc(100% - 1px), rgba(180,210,240,0.13) 100%),
+      linear-gradient(0deg, transparent 0, transparent calc(100% - 1px), rgba(180,210,240,0.10) 100%);
+    background-size:37px 100%, 100% 37px;
+    pointer-events:none;z-index:1;opacity:0.7;
+  }
+  .board > *{position:relative;z-index:2;}
+
+  /* --- Power jack (Barrel) --- */
+  .uno-power-jack{
+    position:absolute;bottom:14px;left:14px;z-index:6;
+    width:58px;height:44px;
+  }
+  .power-jack-body{
+    width:100%;height:100%;
+    background:linear-gradient(180deg,#2a2a2a 0%,#0a0a0a 100%);
+    border-radius:4px;
+    border:1px solid #333;
+    box-shadow:0 4px 10px rgba(0,0,0,0.8), inset 0 1px 1px rgba(255,255,255,0.12);
+    position:relative;
+    overflow:hidden;
+  }
+  .power-jack-body::before{
+    content:"";position:absolute;top:6px;left:6px;right:6px;height:3px;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,0.18),transparent);
+    border-radius:2px;
+  }
+  .power-jack-body::after{
+    content:"";position:absolute;top:8px;left:8px;right:8px;bottom:8px;
+    border:2px solid #000;
+    border-radius:2px;
+    background:radial-gradient(ellipse at center, #000 40%, #1a1a1a 70%, #333 100%);
+    box-shadow:inset 0 2px 6px rgba(0,0,0,0.95);
+  }
+  .power-jack-center{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:6px;height:6px;border-radius:50%;
+    background:radial-gradient(circle,#555,#0a0a0a 70%);
+    z-index:1;
+  }
+
+  /* --- USB Type-B --- */
+  .uno-usb{
+    position:absolute;top:20px;left:14px;z-index:7;
+    width:56px;height:44px;
+  }
+  .usb-body{
+    width:100%;height:100%;
+    background:
+      linear-gradient(180deg,
+        #b8b8b8 0%,#8a8a8a 20%,#707070 50%,#8a8a8a 80%,#a8a8a8 100%);
+    border-radius:3px 3px 4px 4px;
+    border:1px solid #4a4a4a;
+    box-shadow:
+      0 4px 10px rgba(0,0,0,0.8),
+      inset 0 1px 2px rgba(255,255,255,0.5),
+      inset 0 -2px 4px rgba(0,0,0,0.3);
+    position:relative;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .usb-body::before{
+    content:"";position:absolute;top:5px;left:5px;right:5px;bottom:5px;
+    background:linear-gradient(180deg,#3a3a3a 0%,#1a1a1a 100%);
+    border-radius:2px;
+    box-shadow:inset 0 2px 6px rgba(0,0,0,0.9), inset 0 -1px 2px rgba(255,255,255,0.15);
+  }
+  .usb-body::after{
+    content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:26px;height:8px;
+    background:#0a0a0a;
+    border-radius:2px;
+    box-shadow:inset 0 2px 4px rgba(0,0,0,1);
+  }
+  .usb-pins{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    display:flex;gap:5px;z-index:1;
+  }
+  .usb-pin{
+    width:3px;height:6px;
+    background:linear-gradient(180deg,#f0cf72,#7a611f);
+    border-radius:1px;
+    box-shadow:0 0 2px rgba(240,207,114,0.4);
+  }
+
+  /* --- Logo --- */
+  .uno-logo{
+    position:absolute;top:14px;right:16px;z-index:6;
+    display:flex;flex-direction:column;align-items:flex-end;
+    font-family:var(--display);line-height:1;
+    text-shadow:0 2px 4px rgba(0,0,0,0.6);
+    pointer-events:none;
+    opacity:0.95;
+  }
+  .uno-logo-infinity{
+    font-size:34px;font-weight:700;color:#fff;
+    margin-bottom:-6px;line-height:1;
+    filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+  }
+  .uno-logo-text{
+    font-size:17px;font-weight:700;letter-spacing:0.14em;
+    color:#fff;
+  }
+  .uno-logo-sub{
+    font-size:13px;font-weight:500;letter-spacing:0.42em;
+    color:rgba(255,255,255,0.78);margin-top:1px;
+  }
+
+  /* --- Reset button --- */
+  .uno-reset{
+    position:absolute;top:18px;right:110px;z-index:7;
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+  }
+  .reset-btn{
+    width:30px;height:30px;border-radius:50%;
+    background:
+      radial-gradient(circle at 32% 28%,
+        #ff5848 0%,#c4301f 40%,#8b1a1a 70%,#6b1010 100%);
+    border:2px solid #5a0e0e;
+    box-shadow:
+      0 4px 10px rgba(0,0,0,0.75),
+      inset 0 2px 3px rgba(255,255,255,0.4),
+      inset 0 -2px 4px rgba(0,0,0,0.5);
+    cursor:pointer;
+    transition:transform .08s, box-shadow .08s;
+    position:relative;
+  }
+  .reset-btn::after{
+    content:"";position:absolute;top:3px;left:5px;width:7px;height:5px;
+    border-radius:50%;background:rgba(255,255,255,0.5);
+    filter:blur(1px);
+  }
+  .reset-btn:active{
+    transform:scale(0.9);
+    box-shadow:0 2px 4px rgba(0,0,0,0.8), inset 0 2px 4px rgba(0,0,0,0.6);
+  }
+  .reset-label{
+    font-family:var(--mono);font-size:6.5px;letter-spacing:0.15em;
+    color:rgba(255,255,255,0.6);font-weight:600;
+  }
+
+  /* --- Built-in button for pin 13 --- */
+  .uno-btn13{
+    position:absolute;top:18px;right:160px;z-index:7;
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+  }
+  .btn13-btn{
+    width:30px;height:30px;border-radius:50%;
+    background:
+      radial-gradient(circle at 32% 28%,#6a6560,#3a352f 60%,#201c18 100%);
+    border:2px solid #2a2018;
+    box-shadow:
+      0 4px 10px rgba(0,0,0,0.75),
+      inset 0 2px 3px rgba(255,255,255,0.2),
+      inset 0 -2px 4px rgba(0,0,0,0.5);
+    cursor:pointer;user-select:none;-webkit-user-select:none;
+    touch-action:manipulation;
+    transition:transform .08s, box-shadow .08s, background .08s;
+    position:relative;
+  }
+  .btn13-btn::after{
+    content:"";position:absolute;top:4px;left:6px;width:7px;height:5px;
+    border-radius:50%;background:rgba(255,255,255,0.25);
+    filter:blur(1px);
+  }
+  .btn13-btn:active,.btn13-btn.pressed{
+    transform:scale(0.9);
+    background:radial-gradient(circle at 32% 28%,#6ab4ff,#2a5a9e 70%,#0a2a4a 100%);
+    box-shadow:
+      0 0 16px 5px rgba(74,158,255,0.75),
+      inset 0 2px 4px rgba(0,0,0,0.5);
+  }
+  .btn13-label{
+    font-family:var(--mono);font-size:6.5px;letter-spacing:0.15em;
+    color:rgba(255,255,255,0.6);font-weight:600;
+  }
+
+  /* --- MCU ATmega328P DIP-28 --- */
+  .uno-mcu{
+    position:absolute;top:50%;left:50%;
+    transform:translate(-50%,-50%);
+    z-index:4;
+  }
+  .mcu-body{
+    width:118px;height:60px;
+    background:linear-gradient(180deg,#232323 0%,#0d0d0d 60%,#050505 100%);
+    border:1px solid #2a2a2a;
+    border-radius:3px;
+    position:relative;
+    box-shadow:
+      0 6px 14px rgba(0,0,0,0.85),
+      inset 0 1px 2px rgba(255,255,255,0.1),
+      inset 0 -1px 2px rgba(0,0,0,0.8);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .mcu-body::before{
+    content:"";position:absolute;top:2px;left:6px;right:6px;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,0.18),transparent);
+  }
+  /* DIP notch */
+  .mcu-notch{
+    position:absolute;top:-1px;left:50%;transform:translateX(-50%);
+    width:22px;height:9px;
+    background:#050505;
+    border-radius:0 0 12px 12px;
+    border:1px solid #2a2a2a;border-top:none;
+    box-shadow:inset 0 -2px 3px rgba(0,0,0,0.9);
+  }
+  /* DIP pins — 14 на сторону */
+  .mcu-pins-left,.mcu-pins-right{
+    position:absolute;top:5px;bottom:5px;width:10px;
+    display:flex;flex-direction:column;justify-content:space-between;
+  }
+  .mcu-pins-left{left:-10px;}
+  .mcu-pins-right{right:-10px;}
+  .mcu-pins-left span,.mcu-pins-right span{
+    display:block;height:2.4px;
+    background:linear-gradient(180deg,#d8c07a,#8a7018);
+    border-radius:1px;
+    box-shadow:0 1px 1px rgba(0,0,0,0.5);
+  }
+  .mcu-pins-left span:first-child,.mcu-pins-right span:first-child{
+    margin-top:1px;
+  }
+  /* Маркировка */
+  .mcu-label{
+    font-family:var(--mono);font-size:7.5px;letter-spacing:0.05em;
+    color:rgba(200,200,200,0.55);text-align:center;line-height:1.35;
+    font-weight:600;
+  }
+  .mcu-label .brand-atmel{color:rgba(220,220,220,0.75);font-size:6.5px;letter-spacing:0.1em;}
+  .mcu-label .part{color:rgba(240,240,240,0.85);font-size:9px;letter-spacing:0.04em;font-weight:700;}
+  .mcu-label .sub{font-size:5.5px;color:rgba(180,180,180,0.45);}
+
+  /* --- ATmega16U2 (USB controller) --- */
+  .uno-usb-chip{
+    position:absolute;top:80px;left:88px;z-index:4;
+  }
+  .usb-chip-body{
+    width:54px;height:42px;
+    background:linear-gradient(180deg,#1f1f1f,#0a0a0a);
+    border:1px solid #2a2a2a;border-radius:3px;
+    box-shadow:0 4px 10px rgba(0,0,0,0.8), inset 0 1px 1px rgba(255,255,255,0.08);
+    position:relative;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .usb-chip-pins{
+    position:absolute;inset:2px -6px;
+    display:flex;flex-direction:column;justify-content:space-between;
+  }
+  .usb-chip-pins span{
+    display:block;height:1.8px;
+    background:linear-gradient(180deg,#d8c07a,#8a7018);
+    border-radius:1px;
+  }
+  .usb-chip-label{
+    font-family:var(--mono);font-size:5.5px;color:rgba(200,200,200,0.5);
+    text-align:center;line-height:1.3;letter-spacing:0.04em;
+  }
+
+  /* --- Crystal 16 MHz --- */
+  .uno-xtal{
+    position:absolute;top:calc(50% + 46px);left:50%;
+    transform:translateX(-50%);
+    z-index:4;
+  }
+  .xtal-body{
+    width:64px;height:22px;
+    background:
+      linear-gradient(180deg,
+        #e8e8e8 0%,#c8c8c8 20%,#a0a0a0 50%,#c0c0c0 80%,#d8d8d8 100%);
+    border-radius:11px;
+    box-shadow:
+      0 4px 10px rgba(0,0,0,0.75),
+      inset 0 2px 4px rgba(255,255,255,0.7),
+      inset 0 -2px 4px rgba(0,0,0,0.15);
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-size:7px;color:#222;
+    letter-spacing:0.1em;font-weight:600;
+    position:relative;
+  }
+  .xtal-body::before{
+    content:"";position:absolute;left:5px;top:50%;transform:translateY(-50%);
+    width:3px;height:70%;background:linear-gradient(180deg,#707070,#3a3a3a);border-radius:2px;
+  }
+  .xtal-body::after{
+    content:"";position:absolute;right:5px;top:50%;transform:translateY(-50%);
+    width:3px;height:70%;background:linear-gradient(180deg,#707070,#3a3a3a);border-radius:2px;
+  }
+
+  /* --- Voltage regulator --- */
+  .uno-reg{
+    position:absolute;bottom:30px;left:78px;z-index:5;
+    display:flex;flex-direction:column;align-items:center;gap:2px;
+  }
+  .reg-body{
+    width:46px;height:28px;
+    background:linear-gradient(180deg,#2a2a2a 0%,#111 100%);
+    border:1px solid #3a3a3a;border-radius:2px;
+    box-shadow:0 4px 8px rgba(0,0,0,0.75), inset 0 1px 1px rgba(255,255,255,0.1);
+    position:relative;
+  }
+  .reg-body::after{
+    content:"";position:absolute;top:2px;left:4px;right:4px;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent);
+  }
+  .reg-body::before{
+    content:"";position:absolute;bottom:-4px;left:2px;right:2px;height:3px;
+    background:repeating-linear-gradient(90deg,#555 0,#555 2px,transparent 2px,transparent 5px);
+  }
+  .reg-label{
+    font-family:var(--mono);font-size:5.5px;color:rgba(255,255,255,0.5);
+    letter-spacing:0.05em;margin-top:4px;
+  }
+
+  /* --- Ceramic caps --- */
+  .uno-cap{position:absolute;bottom:34px;left:138px;z-index:5;}
+  .uno-cap-2{bottom:34px;left:176px;}
+  .cap-body{
+    width:20px;height:26px;
+    background:linear-gradient(180deg,#1a1a1a,#050505);
+    border-radius:3px;border:1px solid #2a2a2a;
+    box-shadow:0 3px 7px rgba(0,0,0,0.7);
+    position:relative;
+  }
+  .cap-body::before{
+    content:"";position:absolute;top:-2px;left:50%;transform:translateX(-50%);
+    width:9px;height:3px;background:#333;border-radius:2px 2px 0 0;
+  }
+  .cap-body::after{
+    content:"";position:absolute;bottom:3px;left:50%;transform:translateX(-50%);
+    width:12px;height:1px;background:rgba(255,255,255,0.15);
+  }
+
+  /* --- Electrolytic caps --- */
+  .uno-elcap{
+    position:absolute;z-index:5;
+    width:26px;height:32px;
+    background:
+      radial-gradient(circle at 30% 25%, #3a3a3a 0%, #1a1a1a 40%, #050505 100%);
+    border-radius:4px;
+    border:1px solid #333;
+    box-shadow:0 4px 10px rgba(0,0,0,0.8);
+  }
+  .uno-elcap::after{
+    content:"+";position:absolute;top:1px;left:3px;
+    font-family:var(--mono);font-size:9px;font-weight:700;
+    color:rgba(255,255,255,0.6);
+  }
+  .uno-elcap::before{
+    content:"";position:absolute;bottom:5px;left:50%;transform:translateX(-50%);
+    width:14px;height:14px;
+    background:
+      linear-gradient(0deg, transparent 45%, #555 45%, #555 55%, transparent 55%),
+      linear-gradient(90deg, transparent 45%, #555 45%, #555 55%, transparent 55%);
+    border-radius:50%;opacity:0.75;
+  }
+  .uno-elcap-1{bottom:68px;left:138px;}
+  .uno-elcap-2{bottom:68px;left:176px;}
+
+  /* --- Power LED --- */
+  .uno-power-led{
+    position:absolute;bottom:26px;right:18px;z-index:6;
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+  }
+  .pled{
+    width:11px;height:11px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#a8ffc8,#3bff6b 50%,#0a7a2a 100%);
+    box-shadow:0 0 12px 5px rgba(92,255,143,0.9), inset 0 -1px 2px rgba(0,0,0,0.4);
+  }
+  .pled-label{
+    font-family:var(--mono);font-size:6px;color:rgba(255,255,255,0.65);
+    letter-spacing:0.15em;font-weight:600;
+  }
+
+  /* --- TX/RX LEDs --- */
+  .uno-txrx{
+    position:absolute;bottom:54px;right:18px;z-index:6;
+    display:flex;gap:14px;
+  }
+  .txrx-item{
+    display:flex;flex-direction:column;align-items:center;gap:2px;
+    font-family:var(--mono);font-size:6px;color:rgba(255,255,255,0.65);
+    font-weight:600;letter-spacing:0.1em;
+  }
+  .tx-led,.rx-led{
+    width:10px;height:10px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#4a4a3a,#2a2a1a 60%,#1a1a0a 100%);
+    border:1px solid #3a3a3a;
+    transition:background .15s, box-shadow .15s;
+  }
+  .tx-led.active,.rx-led.active{
+    background:radial-gradient(circle at 35% 30%,#fff8b0,#ffe15c 50%,#8a6a0a 100%);
+    box-shadow:0 0 10px 4px rgba(255,225,92,0.85);
+  }
+
+  /* --- L LED (pin 13) --- */
+  .uno-led-13{
+    position:absolute;bottom:26px;right:66px;z-index:6;
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+  }
+  .l-led{
+    width:11px;height:11px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#5a4030,#3a2010 60%,#1a0a00 100%);
+    border:1px solid #3a2010;
+    transition:background .1s, box-shadow .1s;
+  }
+  .l-led.active{
+    background:radial-gradient(circle at 35% 30%,#fff0a0,#ffb050 50%,#8a4010 100%);
+    box-shadow:0 0 12px 5px rgba(255,176,80,0.9);
+  }
+  .l-led-label{
+    font-family:var(--mono);font-size:6px;color:rgba(255,255,255,0.65);
+    letter-spacing:0.15em;font-weight:600;
+  }
+
+  /* --- ICSP 2x3 --- */
+  .uno-icsp{
+    position:absolute;z-index:4;
+    width:38px;height:26px;
+    background:rgba(15,15,15,0.8);
+    border:1px solid #2a2a2a;
+    border-radius:2px;
+    box-shadow:inset 0 1px 2px rgba(0,0,0,0.8);
+  }
+  .uno-icsp-1{top:50%;right:14px;transform:translateY(-50%);}
+  .uno-icsp-2{top:50%;left:14px;transform:translateY(-50%);}
+  .icsp-pins{
+    position:absolute;inset:4px;
+    display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(3,1fr);
+    gap:2px;
+  }
+  .icsp-pins span{
+    background:radial-gradient(circle at 35% 30%,#e0c078,#a88840 60%,#5a4010 100%);
+    border-radius:1px;
+    box-shadow:0 1px 1px rgba(0,0,0,0.5);
+  }
+  /* ICSP key (notch) */
+  .uno-icsp::after{
+    content:"";position:absolute;top:-1px;left:50%;transform:translateX(-50%);
+    width:10px;height:3px;
+    background:rgba(15,15,15,0.8);
+    border-radius:0 0 3px 3px;
+    border:1px solid #2a2a2a;border-top:none;
+  }
+
+  /* --- Decorative parts (resistors with color bands) --- */
+  .uno-resistor{
+    position:absolute;z-index:4;
+    width:22px;height:9px;
+    background:linear-gradient(180deg,#e8d098 0%,#c0a060 50%,#9a7a40 100%);
+    border-radius:4px;
+    box-shadow:0 2px 4px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.4);
+  }
+  .uno-resistor::before{
+    content:"";position:absolute;top:1px;bottom:1px;left:5px;right:5px;
+    background:
+      repeating-linear-gradient(90deg,
+        #8a1a1a 0,#8a1a1a 2px,
+        transparent 2px,transparent 4px,
+        #1a1a8a 4px,#1a1a8a 6px,
+        transparent 6px,transparent 8px,
+        #1a8a1a 8px,#1a8a1a 10px,
+        transparent 10px,transparent 12px);
+    border-radius:2px;
+  }
+  .uno-resistor-1{top:19%;left:42%;}
+  .uno-resistor-2{top:19%;left:54%;}
+  .uno-resistor-3{bottom:19%;left:42%;}
+  .uno-resistor-4{bottom:19%;left:54%;}
+
+  /* --- Diodes --- */
+  .uno-diode{
+    position:absolute;z-index:4;
+    width:18px;height:10px;
+    background:linear-gradient(180deg,#1a1a1a,#050505);
+    border:1px solid #333;border-radius:2px;
+    box-shadow:0 2px 3px rgba(0,0,0,0.6);
+  }
+  /* Cathode stripe */
+  .uno-diode::after{
+    content:"";position:absolute;right:3px;top:0;bottom:0;width:2px;
+    background:linear-gradient(180deg,#e0e0e0,#909090);
+  }
+  .uno-diode::before{
+    content:"";position:absolute;left:3px;top:0;bottom:0;width:1px;
+    background:#4a4a4a;
+  }
+  .uno-diode-1{top:40%;left:16%;transform:rotate(15deg);}
+  .uno-diode-2{top:40%;right:16%;transform:rotate(-15deg);}
+
+  /* --- Transistors SOT-23 --- */
+  .uno-transistor{
+    position:absolute;z-index:4;
+    width:14px;height:17px;
+    background:linear-gradient(180deg,#1a1a1a,#050505);
+    border:1px solid #333;border-radius:2px;
+    box-shadow:0 2px 4px rgba(0,0,0,0.6);
+  }
+  .uno-transistor::after{
+    content:"";position:absolute;bottom:-4px;left:1px;right:1px;height:3px;
+    background:repeating-linear-gradient(90deg,#c8c8c8 0,#c8c8c8 1.5px,transparent 1.5px,transparent 4px);
+  }
+  .uno-transistor-1{top:64%;left:24%;}
+  .uno-transistor-2{top:64%;right:24%;}
+
+  /* --- SMD components --- */
+  .uno-smd{
+    position:absolute;z-index:4;
+    width:10px;height:6px;
+    background:#3a3a3a;
+    border-radius:1px;
+    box-shadow:0 0 0 1px #2a2a2a, 0 1px 2px rgba(0,0,0,0.5);
+    position:relative;
+  }
+  .uno-smd::before,.uno-smd::after{
+    content:"";position:absolute;top:1px;bottom:1px;width:2px;
+    background:linear-gradient(180deg,#d8c07a,#8a7018);
+  }
+  .uno-smd::before{left:0;}
+  .uno-smd::after{right:0;}
+  .uno-smd-1{top:33%;left:30%;}
+  .uno-smd-2{top:33%;left:34%;}
+  .uno-smd-3{top:33%;right:30%;}
+  .uno-smd-4{top:33%;right:34%;}
+  .uno-smd-5{top:70%;left:30%;}
+  .uno-smd-6{top:70%;right:30%;}
+
+  /* --- Test pads --- */
+  .uno-pad{
+    position:absolute;z-index:4;
+    width:8px;height:8px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#f0cf72,#c9a53f 55%,#7a611f 100%);
+    box-shadow:0 1px 3px rgba(0,0,0,0.7), inset 0 -1px 1px rgba(0,0,0,0.3);
+  }
+  .uno-pad-1{top:9%;left:30%;}
+  .uno-pad-2{top:9%;right:30%;}
+  .uno-pad-3{bottom:9%;left:30%;}
+  .uno-pad-4{bottom:9%;right:30%;}
+  .uno-pad-5{top:9%;left:50%;transform:translateX(-50%);}
+  .uno-pad-6{bottom:9%;left:50%;transform:translateX(-50%);}
+
+  /* --- Silk marks --- */
+  .uno-mark{
+    position:absolute;z-index:3;pointer-events:none;
+    font-family:var(--mono);font-size:5px;color:rgba(255,255,255,0.45);
+    letter-spacing:0.12em;font-weight:600;
+  }
+  .uno-mark-1{top:8px;left:80px;}
+  .uno-mark-2{bottom:8px;left:80px;}
+  .uno-mark-3{top:8px;right:80px;}
+  .uno-mark-4{bottom:8px;right:80px;}
+  .uno-mark-5{top:50%;left:8px;transform:translateY(-50%) rotate(-90deg);transform-origin:left center;}
+  .uno-mark-6{top:50%;right:8px;transform:translateY(-50%) rotate(90deg);transform-origin:right center;}
+  .uno-mark-7{top:23%;left:50%;transform:translateX(-50%);font-size:5px;}
+  .uno-mark-8{bottom:23%;left:50%;transform:translateX(-50%);font-size:5px;}
+
+  /* ============================================================ */
+  /* ================  PIN HEADERS  ============================= */
+  /* ============================================================ */
+  .board-label{
+    font-family:var(--mono);font-size:10px;color:rgba(255,255,255,0.6);
+    letter-spacing:0.1em;margin-bottom:8px;position:relative;z-index:3;
+    font-weight:600;
+  }
+  .pin-row{
+    display:flex;gap:3px;flex-wrap:wrap;position:relative;
+    margin-bottom:6px;z-index:3;
+    padding:8px 8px;
+    background:linear-gradient(180deg,rgba(0,0,0,0.35),rgba(0,0,0,0.15));
+    border-radius:4px;
+    border:1px solid rgba(0,0,0,0.45);
+    box-shadow:inset 0 2px 4px rgba(0,0,0,0.5);
+  }
+  .pin-row.analog{margin-top:4px;}
+  .pin{
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+    font-family:var(--mono);font-size:8.5px;color:rgba(255,255,255,0.7);
+    position:relative;font-weight:600;
+  }
+  .pin-dot{
+    width:12px;height:12px;border-radius:2px;
+    background:radial-gradient(circle at 32% 28%,#f0cf72,#c9a53f 55%,#5a4010 100%);
+    box-shadow:
+      0 1px 3px rgba(0,0,0,0.6),
+      inset 0 -1px 2px rgba(0,0,0,0.35),
+      inset 0 1px 1px rgba(255,255,255,0.3);
+    transition:box-shadow .15s, background .15s, filter .15s;
+  }
+  .pin-dot.hi{
+    background:radial-gradient(circle at 32% 28%,#fff4cf,#4a9eff 50%,#1a5a9e 100%);
+    box-shadow:
+      0 0 10px 3px rgba(74,158,255,0.85),
+      inset 0 1px 1px rgba(255,255,255,0.5);
+  }
+  .pin-dot.pwm{
+    filter:hue-rotate(-30deg);
+  }
+  .pin-dot .pin-hole{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:4px;height:4px;border-radius:50%;
+    background:radial-gradient(circle,#000 40%,#0a0a0a 100%);
+    box-shadow:inset 0 1px 1px rgba(0,0,0,1);
+  }
+
+  /* Power pins row (above digital) */
+  .uno-power-pins-row{
+    position:absolute;top:50%;left:50%;
+    transform:translate(-50%,-50%) translateY(-125px);
+    display:flex;gap:4px;z-index:5;
+    padding:6px 8px;
+    background:linear-gradient(180deg,rgba(0,0,0,0.35),rgba(0,0,0,0.15));
+    border-radius:4px;
+    border:1px solid rgba(0,0,0,0.45);
+    box-shadow:inset 0 2px 4px rgba(0,0,0,0.5);
+  }
+  .uno-power-pins-row .pp{
+    width:12px;height:12px;border-radius:2px;
+    background:radial-gradient(circle at 32% 28%,#f0cf72,#c9a53f 55%,#5a4010 100%);
+    box-shadow:0 1px 3px rgba(0,0,0,0.6), inset 0 -1px 2px rgba(0,0,0,0.35);
+    position:relative;
+  }
+  .uno-power-pins-row .pp::after{
+    content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:4px;height:4px;border-radius:50%;
+    background:radial-gradient(circle,#000 40%,#0a0a0a 100%);
+  }
+
+  /* ============================================================ */
+  /* ====================  COMPONENTS  ========================== */
+  /* ============================================================ */
+  .workspace{
+    margin-top:14px;position:relative;z-index:3;
+    display:flex;flex-wrap:wrap;gap:10px;
+    min-height:80px;
+  }
+  .empty-hint{
+    font-size:12px;color:rgba(255,255,255,0.5);
+    padding:12px 4px;
+  }
+
+  .component{
+    background:rgba(10,30,50,0.65);
+    border:1px solid rgba(200,220,255,0.28);
+    border-radius:6px;
+    padding:12px 12px 10px;
+    min-width:104px;
+    position:relative;
+    display:flex;flex-direction:column;align-items:center;gap:8px;
+    backdrop-filter:blur(4px);
+  }
+  .component .remove{
+    position:absolute;top:3px;right:5px;
+    background:none;color:rgba(255,255,255,0.45);
+    font-size:14px;line-height:1;padding:2px 5px;
+  }
+  .component .remove:hover{color:var(--danger);}
+  .component .clabel{
+    font-family:var(--mono);font-size:10px;color:rgba(255,255,255,0.7);
+    text-align:center;font-weight:600;
+  }
+
+  /* Realistic LED */
+  .led-real{
+    position:relative;
+    width:36px;height:48px;
+    display:flex;flex-direction:column;align-items:center;
+  }
+  .led-real .led-body{
+    width:26px;height:30px;border-radius:50% 50% 45% 45%;
+    background:radial-gradient(circle at 35% 28%,
+      rgba(255,255,255,0.6) 0%,
+      rgba(255,255,255,0.15) 15%,
+      var(--led-color-dark) 45%,
+      var(--led-color) 75%,
+      var(--led-color-dark) 100%);
+    border:1.5px solid rgba(0,0,0,0.35);
+    box-shadow:
+      inset -3px -4px 8px rgba(0,0,0,0.4),
+      inset 3px 4px 8px rgba(255,255,255,0.25),
+      0 3px 6px rgba(0,0,0,0.5);
+    position:relative;
+    transition:box-shadow .15s, filter .15s, opacity .15s;
+    z-index:2;
+  }
+  .led-real .led-body::after{
+    content:"";position:absolute;
+    top:4px;left:6px;width:8px;height:6px;
+    border-radius:50%;
+    background:rgba(255,255,255,0.55);
+    filter:blur(1px);
+  }
+  .led-real .led-legs{
+    position:absolute;bottom:0;left:50%;transform:translateX(-50%);
+    display:flex;gap:6px;z-index:1;
+  }
+  .led-real .led-leg{
+    width:2.5px;height:18px;
+    background:linear-gradient(180deg,#c0c0c0 0%,#909090 50%,#707070 100%);
+    border-radius:0 0 2px 2px;
+    box-shadow:0 1px 2px rgba(0,0,0,0.4);
+  }
+  .led-real .led-leg:first-child{height:22px;}
+  .led-real .led-flange{
+    position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
+    width:30px;height:5px;border-radius:50%;
+    background:radial-gradient(ellipse at 50% 30%,
+      var(--led-color-dark) 0%,
+      rgba(0,0,0,0.5) 100%);
+    border:1px solid rgba(0,0,0,0.4);
+    z-index:2;
+  }
+  .led-real.on .led-body{
+    box-shadow:
+      inset -3px -4px 8px rgba(0,0,0,0.3),
+      inset 3px 4px 8px rgba(255,255,255,0.4),
+      0 0 18px 6px var(--led-glow),
+      0 0 40px 12px var(--led-glow-soft),
+      0 3px 6px rgba(0,0,0,0.5);
+    filter:brightness(1.6);
+  }
+  .led-real.on .led-body::after{background:rgba(255,255,255,0.85);}
+
+  .led-real.red{--led-color:#ff3b2b;--led-color-dark:#8a1a10;--led-glow:rgba(255,59,43,0.85);--led-glow-soft:rgba(255,59,43,0.35);}
+  .led-real.green{--led-color:#3bff6b;--led-color-dark:#0a7a2a;--led-glow:rgba(59,255,107,0.85);--led-glow-soft:rgba(59,255,107,0.35);}
+  .led-real.blue{--led-color:#3b9bff;--led-color-dark:#0a3a8a;--led-glow:rgba(59,155,255,0.85);--led-glow-soft:rgba(59,155,255,0.35);}
+  .led-real.yellow{--led-color:#ffe13b;--led-color-dark:#8a6a0a;--led-glow:rgba(255,225,59,0.85);--led-glow-soft:rgba(255,225,59,0.35);}
+
+  .btn-comp{
+    width:38px;height:38px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#6a6560,#2a2520 70%);
+    border:2px solid #55483f;
+    display:flex;align-items:center;justify-content:center;
+    user-select:none;-webkit-user-select:none;touch-action:manipulation;
+    box-shadow:0 4px 8px rgba(0,0,0,0.5), inset 0 2px 3px rgba(255,255,255,0.18);
+    transition:transform .08s, box-shadow .08s, background .08s;
+  }
+  .btn-comp::after{
+    content:"";width:14px;height:14px;border-radius:50%;
+    background:#20221f;
+    box-shadow:inset 0 1px 3px rgba(0,0,0,0.7);
+  }
+  .btn-comp.pressed{
+    transform:scale(0.92);
+    background:radial-gradient(circle at 35% 30%,#6ab4ff,var(--accent) 70%);
+    box-shadow:0 0 14px 5px rgba(74,158,255,0.65), inset 0 2px 3px rgba(0,0,0,0.4);
+  }
+  .btn-comp.pressed::after{background:#0a2a4a;}
+
+  .pot-comp input[type=range]{width:90px;accent-color:var(--accent);}
+  .pot-val{font-family:var(--mono);font-size:10px;color:var(--accent);font-weight:600;}
+
+  .add-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;position:relative;z-index:3;}
+  .add-btn{
+    font-size:11.5px;padding:7px 11px;border-radius:4px;
+    background:transparent;border:1px dashed rgba(255,255,255,0.4);color:rgba(255,255,255,0.75);
+    transition:border-color .15s, color .15s;
+  }
+  .add-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+  .add-form{
+    margin-top:10px;padding:10px;border:1px solid #1e3460;border-radius:4px;
+    background:var(--panel-2);
+    display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px;
+    position:relative;z-index:3;
+  }
+  .add-form label{color:var(--text-dim);font-size:11px;font-family:var(--mono);}
+  .add-form .go{background:var(--accent);color:#04101f;padding:7px 12px;border-radius:4px;font-weight:600;font-size:12px;}
+
+  textarea#code{
+    width:100%;min-height:320px;resize:vertical;
+    background:#081020;color:#c8dcf0;
+    border:none;outline:none;
+    font-family:var(--mono);font-size:13px;line-height:1.55;
+    padding:14px 16px;tab-size:2;
+    transition:background .3s, color .3s;
+  }
+  body.light textarea#code{background:#f4f8ff;color:#0a1f3d;}
+  .editor-toolbar{display:flex;gap:6px;align-items:center;}
+
+  #serial{
+    background:#060e1c;
+    min-height:130px;max-height:220px;overflow-y:auto;
+    font-family:var(--mono);font-size:12px;line-height:1.6;
+    padding:12px 16px;color:#8ac8ff;white-space:pre-wrap;word-break:break-word;
+    transition:background .3s, color .3s;
+  }
+  body.light #serial{background:#eef5ff;color:#0a3a6a;}
+  #serial .err{color:var(--danger);}
+  #serial .warn{color:#ffc857;}
+  #serial .muted{color:var(--text-dimmer);}
+
+  .help{font-size:12px;color:var(--text-dim);line-height:1.7;}
+  .help code{background:#081020;padding:1px 5px;border-radius:3px;font-family:var(--mono);color:#a8d0f0;font-size:11.5px;}
+  body.light .help code{background:#eef5ff;color:#0a3a6a;}
+  .help ul{margin:6px 0;padding-left:18px;}
+
+  details.help-box{border:1px solid #1a2d52;border-radius:6px;background:var(--panel);transition:background .3s,border-color .3s;}
+  body.light details.help-box{border-color:#c0d4ec;}
+  details.help-box summary{
+    padding:11px 16px;cursor:pointer;font-family:var(--mono);font-size:11.5px;color:var(--text-dim);
+    list-style:none;display:flex;justify-content:space-between;align-items:center;
+  }
+  details.help-box summary::-webkit-details-marker{display:none;}
+  details.help-box summary::after{content:"+";color:var(--text-dimmer);font-size:15px;}
+  details.help-box[open] summary::after{content:"–";}
+  details.help-box .panel-body{border-top:1px solid #1a2d52;transition:border-color .3s;}
+  body.light details.help-box .panel-body{border-top-color:#c0d4ec;}
+
+  footer{
+    text-align:center;padding:22px;color:var(--text-dimmer);font-size:11px;font-family:var(--mono);
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important;}
+  }
+  @media (max-width:520px){
+    .board{min-height:560px;}
+    .uno-mcu{transform:translate(-50%,-50%) scale(0.9);}
+    .uno-xtal{transform:translateX(-50%) scale(0.9);}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <button class="theme-toggle" id="themeToggle" title="Переключить тему">
+    <span class="icon" id="themeIcon">🌙</span>
+    <span id="themeLabel">Тёмная</span>
+  </button>
+  <div class="brand">
+    <span class="plug">🔌</span>
+    <div>
+      <h1>PinLab</h1>
+      <p>офлайн-песочница Arduino Uno</p>
+    </div>
+  </div>
+  <div class="status-wrap">
+    <span class="status-dot" id="statusDot"></span>
+    <span id="statusText">остановлено</span>
+  </div>
+  <select id="examples">
+    <option value="">Загрузить пример…</option>
+    <option value="blink">Мигающий светодиод</option>
+    <option value="button">Кнопка включает светодиод</option>
+    <option value="pot">Потенциометр меняет яркость</option>
+    <option value="fade">Плавное затухание (fade)</option>
+    <option value="millis">Blink без delay (millis)</option>
+    <option value="serial">Serial эхо-приветствие</option>
+  </select>
+  <button class="btn btn-run" id="runBtn">▶️ Запустить</button>
+  <button class="btn btn-stop" id="stopBtn" disabled>■ Стоп</button>
+</header>
+
+<main>
+  <div class="col">
+    <div class="panel">
+      <div class="panel-head"><span>ARDUINO UNO · R3</span><span id="pinSummary">все пины LOW</span></div>
+      <div class="panel-body" style="padding:12px;">
+        <div class="board" id="board">
+          <div class="board-label">DIGITAL (PWM ~) 0–13</div>
+          <div class="pin-row" id="digitalPins"></div>
+          <div class="board-label" style="margin-top:14px;">ANALOG IN A0–A5</div>
+          <div class="pin-row analog" id="analogPins"></div>
+
+          <div class="workspace" id="workspace">
+            <div class="empty-hint" id="emptyHint">Пока нет компонентов — добавьте светодиод ниже</div>
+          </div>
+
+          <div class="add-row">
+            <button class="add-btn" data-add="led">+ светодиод</button>
+            <button class="add-btn" data-add="button">+ кнопка</button>
+            <button class="add-btn" data-add="pot">+ потенциометр</button>
+          </div>
+          <div id="addFormHost"></div>
+        </div>
+      </div>
+    </div>
+
+    <details class="help-box">
+      <summary>Что понимает редактор кода</summary>
+      <div class="panel-body help">
+        Пишите код в стиле Arduino — большинство синтаксиса C++ работает как есть.
+        <ul>
+          <li><code>void setup()</code> / <code>void loop()</code></li>
+          <li><code>pinMode(pin, OUTPUT|INPUT|INPUT_PULLUP)</code></li>
+          <li><code>digitalWrite(pin, HIGH|LOW)</code>, <code>digitalRead(pin)</code></li>
+          <li><code>analogWrite(pin, 0–255)</code> — ШИМ (реально на 3,5,6,9,10,11)</li>
+          <li><code>analogRead(A0)</code> или <code>analogRead("A0")</code> — 0–1023</li>
+          <li><code>delay(ms)</code>, <code>millis()</code></li>
+          <li><code>Serial.begin/print/println</code> — вывод в монитор порта</li>
+          <li>Типы <code>int / float / long / bool / String</code> — как в C++</li>
+        </ul>
+        <p style="margin:8px 0 0;color:var(--text-dimmer);font-size:11.5px;">Поддерживается сабсет C++. Шаблоны, указатели, классы и препроцессор — не работают.</p>
+      </div>
+    </details>
+  </div>
+
+  <div class="col">
+    <div class="panel">
+      <div class="panel-head">
+        <span>КОД</span>
+        <span class="editor-toolbar">
+          <button class="add-btn btn-icon" id="copyCode" title="Копировать">📋</button>
+          <button class="add-btn btn-icon" id="exportCode" title="Скачать .ino">⬇️</button>
+          <button class="add-btn btn-icon" id="importCode" title="Загрузить .ino">⬆️</button>
+          <span style="font-family:var(--mono);font-size:11px;">Ctrl+Enter ▶</span>
+        </span>
+      </div>
+      <textarea id="code" spellcheck="false"></textarea>
+      <input type="file" id="fileInput" accept=".ino,.txt" style="display:none">
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <span>МОНИТОР ПОРТА</span>
+        <span class="editor-toolbar">
+          <span id="loopCounter" style="font-family:var(--mono);font-size:11px;color:var(--text-dimmer);">loop: 0</span>
+          <button class="add-btn" id="clearSerial" style="padding:3px 9px;">очистить</button>
+        </span>
+      </div>
+      <div id="serial"><span class="muted">// вывод Serial.print появится здесь</span></div>
+    </div>
+  </div>
+</main>
+
+<footer>PinLab — локальная симуляция, ничего не отправляется в сеть</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============================================================ */
+  /*                       THEME                                  */
+  /* ============================================================ */
+  const themeToggle = document.getElementById('themeToggle');
+  const themeIcon = document.getElementById('themeIcon');
+  const themeLabel = document.getElementById('themeLabel');
+  function applyTheme(light){
+    document.body.classList.toggle('light', light);
+    themeIcon.textContent = light ? '☀️' : '🌙';
+    themeLabel.textContent = light ? 'Светлая' : 'Тёмная';
+    try{ localStorage.setItem('pinlab-theme', light?'light':'dark'); }catch(e){}
+  }
+  let savedTheme = 'dark';
+  try{ savedTheme = localStorage.getItem('pinlab-theme') || 'dark'; }catch(e){}
+  applyTheme(savedTheme==='light');
+  themeToggle.addEventListener('click', ()=>{
+    applyTheme(!document.body.classList.contains('light'));
+  });
+
+  /* ============================================================ */
+  /*                       STATE                                  */
+  /* ============================================================ */
+  let components = [];
+  let pinStates = {};
+  let pwmStates = {};
+  let pinModes = {};
+  let buttonPressed = {};
+  let potValues = {};
+  let running = false;
+  let runGen = 0;
+  let cancelHandlers = [];
+  let startTime = 0;
+  let compIdSeq = 1;
+  let loopCount = 0;
+
+  const DIGITAL_PINS = Array.from({length:14}, (_,i)=>String(i));
+  const ANALOG_PINS = ["A0","A1","A2","A3","A4","A5"];
+  const PWM_PINS = ["3","5","6","9","10","11"];
+
+  const digitalPinsEl = document.getElementById('digitalPins');
+  const analogPinsEl = document.getElementById('analogPins');
+  const workspaceEl = document.getElementById('workspace');
+  const emptyHint = document.getElementById('emptyHint');
+  const addFormHost = document.getElementById('addFormHost');
+  const serialEl = document.getElementById('serial');
+  const codeEl = document.getElementById('code');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const runBtn = document.getElementById('runBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const pinSummary = document.getElementById('pinSummary');
+  const boardEl = document.getElementById('board');
+  const loopCounterEl = document.getElementById('loopCounter');
+
+  ANALOG_PINS.forEach(p=>potValues[p]=0);
+
+  /* ============================================================ */
+  /*                   BOARD DECORATION                           */
+  /* ============================================================ */
+  function decorateBoard(){
+    const frag = document.createDocumentFragment();
+
+    /* USB Type-B */
+    const usb = document.createElement('div');
+    usb.className = 'uno-usb';
+    usb.innerHTML =
+      '<div class="usb-body">' +
+        '<div class="usb-pins">' +
+          '<div class="usb-pin"></div><div class="usb-pin"></div>' +
+          '<div class="usb-pin"></div><div class="usb-pin"></div>' +
+        '</div>' +
+      '</div>';
+    frag.appendChild(usb);
+
+    /* Power jack */
+    const power = document.createElement('div');
+    power.className = 'uno-power-jack';
+    power.innerHTML =
+      '<div class="power-jack-body">' +
+        '<div class="power-jack-center"></div>' +
+      '</div>';
+    frag.appendChild(power);
+
+    /* Logo */
+    const logo = document.createElement('div');
+    logo.className = 'uno-logo';
+    logo.innerHTML =
+      '<div class="uno-logo-infinity">∞</div>' +
+      '<div class="uno-logo-text">ARDUINO</div>' +
+      '<div class="uno-logo-sub">UNO</div>';
+    frag.appendChild(logo);
+
+    /* Reset */
+    const reset = document.createElement('div');
+    reset.className = 'uno-reset';
+    reset.innerHTML = '<div class="reset-btn" id="resetBtn" title="RESET"></div><div class="reset-label">RESET</div>';
+    frag.appendChild(reset);
+
+    /* Built-in button 13 */
+    const btn13 = document.createElement('div');
+    btn13.className = 'uno-btn13';
+    btn13.innerHTML =
+      '<div class="btn13-btn" id="boardBtn13" title="Встроенная кнопка (пин 13)"></div>' +
+      '<div class="btn13-label">BTN</div>';
+    frag.appendChild(btn13);
+
+    /* MCU ATmega328P DIP-28 */
+    const mcu = document.createElement('div');
+    mcu.className = 'uno-mcu';
+    const leftPins = Array.from({length:14},()=>'<span></span>').join('');
+    const rightPins = Array.from({length:14},()=>'<span></span>').join('');
+    mcu.innerHTML =
+      '<div class="mcu-body">' +
+        '<div class="mcu-notch"></div>' +
+        '<div class="mcu-pins-left">' + leftPins + '</div>' +
+        '<div class="mcu-pins-right">' + rightPins + '</div>' +
+        '<div class="mcu-label">' +
+          '<span class="brand-atmel">ATMEL</span><br>' +
+          '<span class="part">ATMEGA328P</span><br>' +
+          '<span class="sub">PU 1624</span>' +
+        '</div>' +
+      '</div>';
+    frag.appendChild(mcu);
+
+    /* USB controller ATmega16U2 */
+    const usbChip = document.createElement('div');
+    usbChip.className = 'uno-usb-chip';
+    usbChip.innerHTML =
+      '<div class="usb-chip-body">' +
+        '<div class="usb-chip-pins">' +
+          Array.from({length:9},()=>'<span></span>').join('') +
+        '</div>' +
+        '<div class="usb-chip-label">ATMEGA<br>16U2</div>' +
+      '</div>';
+    frag.appendChild(usbChip);
+
+    /* Crystal */
+    const xtal = document.createElement('div');
+    xtal.className = 'uno-xtal';
+    xtal.innerHTML = '<div class="xtal-body">16.000</div>';
+    frag.appendChild(xtal);
+
+    /* Regulator */
+    const reg = document.createElement('div');
+    reg.className = 'uno-reg';
+    reg.innerHTML = '<div class="reg-body"></div><div class="reg-label">NCP1117</div>';
+    frag.appendChild(reg);
+
+    /* Ceramic caps */
+    ['uno-cap','uno-cap uno-cap-2'].forEach(cls=>{
+      const c = document.createElement('div');
+      c.className = cls;
+      c.innerHTML = '<div class="cap-body"></div>';
+      frag.appendChild(c);
+    });
+
+    /* Electrolytic caps */
+    ['uno-elcap uno-elcap-1','uno-elcap uno-elcap-2'].forEach(cls=>{
+      const e = document.createElement('div');
+      e.className = cls;
+      frag.appendChild(e);
+    });
+
+    /* Power LED */
+    const powerLed = document.createElement('div');
+    powerLed.className = 'uno-power-led';
+    powerLed.innerHTML = '<div class="pled"></div><div class="pled-label">ON</div>';
+    frag.appendChild(powerLed);
+
+    /* L LED (pin 13) */
+    const lLed = document.createElement('div');
+    lLed.className = 'uno-led-13';
+    lLed.innerHTML = '<div class="l-led" id="boardLed13"></div><div class="l-led-label">L</div>';
+    frag.appendChild(lLed);
+
+    /* TX/RX */
+    const txrx = document.createElement('div');
+    txrx.className = 'uno-txrx';
+    txrx.innerHTML =
+      '<div class="txrx-item"><div class="tx-led" id="txLed"></div><span>TX</span></div>' +
+      '<div class="txrx-item"><div class="rx-led" id="rxLed"></div><span>RX</span></div>';
+    frag.appendChild(txrx);
+
+    /* ICSP x2 */
+    ['uno-icsp uno-icsp-1','uno-icsp uno-icsp-2'].forEach(cls=>{
+      const i = document.createElement('div');
+      i.className = cls;
+      i.innerHTML = '<div class="icsp-pins">' +
+        Array.from({length:6},()=>'<span></span>').join('') +
+        '</div>';
+      frag.appendChild(i);
+    });
+
+    /* Resistors */
+    for(let i=1;i<=4;i++){
+      const r = document.createElement('div');
+      r.className = 'uno-resistor uno-resistor-' + i;
+      frag.appendChild(r);
+    }
+
+    /* Diodes */
+    for(let i=1;i<=2;i++){
+      const d = document.createElement('div');
+      d.className = 'uno-diode uno-diode-' + i;
+      frag.appendChild(d);
+    }
+
+    /* Transistors */
+    for(let i=1;i<=2;i++){
+      const t = document.createElement('div');
+      t.className = 'uno-transistor uno-transistor-' + i;
+      frag.appendChild(t);
+    }
+
+    /* SMD */
+    for(let i=1;i<=6;i++){
+      const s = document.createElement('div');
+      s.className = 'uno-smd uno-smd-' + i;
+      frag.appendChild(s);
+    }
+
+    /* Test pads */
+    for(let i=1;i<=6;i++){
+      const p = document.createElement('div');
+      p.className = 'uno-pad uno-pad-' + i;
+      frag.appendChild(p);
+    }
+
+    /* Silk marks */
+    const marks = ['REV 3','MADE IN ITALY','RoHS','© ARDUINO','DIGITAL','ANALOG','POWER','GND'];
+    for(let i=1;i<=8;i++){
+      const m = document.createElement('div');
+      m.className = 'uno-mark uno-mark-' + i;
+      m.textContent = marks[i-1];
+      frag.appendChild(m);
+    }
+
+    /* Power pins row */
+    const ppRow = document.createElement('div');
+    ppRow.className = 'uno-power-pins-row';
+    ppRow.innerHTML = Array.from({length:8},()=>'<div class="pp"></div>').join('');
+    frag.appendChild(ppRow);
+
+    boardEl.appendChild(frag);
+  }
+  decorateBoard();
+
+  /* ============================================================ */
+  /*                   PIN STRIP                                  */
+  /* ============================================================ */
+  function buildPinStrip(){
+    digitalPinsEl.innerHTML = '';
+    DIGITAL_PINS.forEach(p=>{
+      const wrap = document.createElement('div');
+      wrap.className = 'pin';
+      const isPwm = PWM_PINS.includes(p);
+      wrap.innerHTML = '<div class="pin-dot" id="dot-d'+p+'"><div class="pin-hole"></div></div>' +
+        '<span>' + (isPwm ? '~' : '') + p + '</span>';
+      digitalPinsEl.appendChild(wrap);
+    });
+    analogPinsEl.innerHTML = '';
+    ANALOG_PINS.forEach(p=>{
+      const wrap = document.createElement('div');
+      wrap.className = 'pin';
+      wrap.innerHTML = '<div class="pin-dot" id="dot-'+p+'"><div class="pin-hole"></div></div><span>'+p+'</span>';
+      analogPinsEl.appendChild(wrap);
+    });
+  }
+  buildPinStrip();
+
+  function refreshPinStrip(){
+    let hiCount = 0;
+    DIGITAL_PINS.forEach(p=>{
+      const dot = document.getElementById('dot-d'+p);
+      const on = (pinStates[p]===1) || (pwmStates[p]>0);
+      if(on) hiCount++;
+      dot.classList.toggle('hi', !!on);
+      // ШИМ-яркость
+      if(pwmStates[p] > 0){
+        dot.style.opacity = 0.4 + 0.6*(pwmStates[p]/255);
+      } else {
+        dot.style.opacity = '';
+      }
+    });
+    ANALOG_PINS.forEach(p=>{
+      const dot = document.getElementById('dot-'+p);
+      const v = potValues[p]||0;
+      dot.classList.toggle('hi', v>50);
+      if(v>0) dot.style.opacity = 0.4 + 0.6*(v/1023);
+      else dot.style.opacity = '';
+    });
+    pinSummary.textContent = hiCount>0 ? (hiCount+' pin HIGH') : 'все пины LOW';
+    // L LED на плате — состояние пина 13
+    const lLed = document.getElementById('boardLed13');
+    if(lLed) lLed.classList.toggle('active', (pinStates['13']===1) || (pwmStates['13']>0));
+  }
+
+  function usedDigitalPins(){
+    return components.filter(c=>c.type!=='pot').map(c=>c.pin);
+  }
+
+  /* ============================================================ */
+  /*                   COMPONENTS                                 */
+  /* ============================================================ */
+  function addComponent(type, pin, color){
+    components.push({id:'c'+(compIdSeq++), type, pin, color});
+    if(type==='pot' && potValues[pin]===undefined) potValues[pin]=0;
+    if(type==='button') buttonPressed[pin] = 0;
+    renderWorkspace();
+    refreshPinStrip();
+  }
+  function removeComponent(id){
+    const c = components.find(x=>x.id===id);
+    components = components.filter(x=>x.id!==id);
+    if(c){
+      if(c.type!=='pot'){ delete pinStates[c.pin]; delete pwmStates[c.pin]; delete buttonPressed[c.pin]; }
+    }
+    renderWorkspace();
+    refreshPinStrip();
+  }
+
+  function renderWorkspace(){
+    workspaceEl.querySelectorAll('.component').forEach(n=>n.remove());
+    emptyHint.style.display = components.length ? 'none' : 'block';
+
+    components.forEach(c=>{
+      const el = document.createElement('div');
+      el.className = 'component';
+      el.dataset.cid = c.id;
+
+      if(c.type==='led'){
+        const led = document.createElement('div');
+        led.className = 'led-real ' + c.color;
+        led.innerHTML =
+          '<div class="led-flange"></div>' +
+          '<div class="led-body"></div>' +
+          '<div class="led-legs"><div class="led-leg"></div><div class="led-leg"></div></div>';
+        el.innerHTML =
+          '<button class="remove" title="удалить">×</button>' +
+          '<div class="led-wrap"></div>' +
+          '<div class="clabel">LED · пин '+c.pin+'</div>';
+        el.querySelector('.led-wrap').appendChild(led);
+      } else if(c.type==='button'){
+        el.innerHTML =
+          '<button class="remove" title="удалить">×</button>'+
+          '<div class="btn-comp" data-hold="'+c.pin+'"></div>'+
+          '<div class="clabel">Кнопка · пин '+c.pin+'</div>';
+      } else if(c.type==='pot'){
+        const v = potValues[c.pin]||0;
+        el.innerHTML =
+          '<button class="remove" title="удалить">×</button>'+
+          '<div class="pot-comp"><input type="range" min="0" max="1023" value="'+v+'" data-pot="'+c.pin+'"></div>'+
+          '<div class="pot-val">'+v+' · '+c.pin+'</div>';
+      }
+
+      el.querySelector('.remove').addEventListener('click', ()=>removeComponent(c.id));
+
+      if(c.type==='button'){
+        const b = el.querySelector('.btn-comp');
+        const press = (e)=>{ e.preventDefault(); buttonPressed[c.pin]=1; b.classList.add('pressed'); };
+        const release = ()=>{ buttonPressed[c.pin]=0; b.classList.remove('pressed'); };
+        b.addEventListener('mousedown', press);
+        b.addEventListener('touchstart', press, {passive:false});
+        ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev=>b.addEventListener(ev, release));
+      }
+      if(c.type==='pot'){
+        const input = el.querySelector('input');
+        input.addEventListener('input', ()=>{
+          potValues[c.pin] = parseInt(input.value,10);
+          el.querySelector('.pot-val').textContent = potValues[c.pin]+' · '+c.pin;
+          refreshPinStrip();
+        });
+      }
+
+      workspaceEl.appendChild(el);
+    });
+    updateWorkspaceStates();
+  }
+
+  /* Только обновление состояний без пересоздания DOM */
+  function updateWorkspaceStates(){
+    components.forEach(c=>{
+      const el = workspaceEl.querySelector('[data-cid="'+c.id+'"]');
+      if(!el) return;
+      if(c.type==='led'){
+        const pwm = pwmStates[c.pin]||0;
+        const on = (pinStates[c.pin]===1) || pwm>0;
+        const led = el.querySelector('.led-real');
+        if(!led) return;
+        led.classList.toggle('on', on);
+        if(on && pwm>0) led.style.opacity = 0.4 + 0.6*(pwm/255);
+        else led.style.opacity = '';
+      } else if(c.type==='button'){
+        const pressed = buttonPressed[c.pin]===1;
+        const b = el.querySelector('.btn-comp');
+        if(b) b.classList.toggle('pressed', pressed);
+      }
+    });
+  }
+
+  /* ============================================================ */
+  /*                   BUILT-IN CONTROLS                          */
+  /* ============================================================ */
+  const boardBtn13 = document.getElementById('boardBtn13');
+  const press13 = (e)=>{ e.preventDefault(); buttonPressed['13']=1; boardBtn13.classList.add('pressed'); };
+  const release13 = ()=>{ buttonPressed['13']=0; boardBtn13.classList.remove('pressed'); };
+  boardBtn13.addEventListener('mousedown', press13);
+  boardBtn13.addEventListener('touchstart', press13, {passive:false});
+  ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev=>boardBtn13.addEventListener(ev, release13));
+
+  const resetBtn = document.getElementById('resetBtn');
+  resetBtn.addEventListener('click', ()=>{
+    // RESET: сброс состояния пинов, перезапуск программы
+    pinStates = {}; pwmStates = {}; pinModes = {};
+    Object.keys(buttonPressed).forEach(k=>buttonPressed[k]=0);
+    refreshPinStrip();
+    updateWorkspaceStates();
+    serialLog('\n--- RESET ---\n', 'muted');
+    if(running){
+      // остановим и запустим заново
+      running = false;
+      cancelHandlers.forEach(fn=>fn()); cancelHandlers = [];
+      setTimeout(()=>{ if(!running) runBtn.click(); }, 20);
+    }
+  });
+
+  /* ============================================================ */
+  /*                   ADD COMPONENT FORM                         */
+  /* ============================================================ */
+  document.querySelectorAll('[data-add]').forEach(btn=>{
+    btn.addEventListener('click', ()=>showAddForm(btn.getAttribute('data-add')));
+  });
+
+  function showAddForm(type){
+    addFormHost.innerHTML = '';
+    const form = document.createElement('div');
+    form.className = 'add-form';
+
+    let pinOptions, pinLabel;
+    if(type==='pot'){
+      pinLabel = 'Аналоговый пин';
+      pinOptions = ANALOG_PINS;
+    } else {
+      pinLabel = 'Цифровой пин';
+      const used = usedDigitalPins();
+      pinOptions = DIGITAL_PINS.filter(p=>!used.includes(p) && p!=='13');
+    }
+    if(pinOptions.length===0){
+      form.innerHTML = '<span style="color:var(--text-dim);font-size:12px;">Свободных пинов не осталось</span>';
+      addFormHost.appendChild(form);
+      return;
+    }
+
+    let html = '<label>'+pinLabel+'</label><select id="pinSel">'+
+      pinOptions.map(p=>'<option value="'+p+'">'+p+'</option>').join('')+'</select>';
+
+    if(type==='led'){
+      html += '<label>Цвет</label><select id="colorSel">'+
+        '<option value="red">красный</option><option value="green">зелёный</option>'+
+        '<option value="blue">синий</option><option value="yellow">жёлтый</option></select>';
+    }
+    html += '<button class="go">Добавить</button>';
+    form.innerHTML = html;
+    addFormHost.appendChild(form);
+
+    form.querySelector('.go').addEventListener('click', ()=>{
+      const pin = form.querySelector('#pinSel').value;
+      const color = type==='led' ? form.querySelector('#colorSel').value : null;
+      addComponent(type, pin, color);
+      addFormHost.innerHTML = '';
+    });
+  }
+
+  /* ============================================================ */
+  /*                   SERIAL                                     */
+  /* ============================================================ */
+  const SERIAL_MAX_LINES = 500;
+  function serialLog(text, cls){
+    if(serialEl.querySelector('.muted')) serialEl.innerHTML='';
+    const span = document.createElement('span');
+    if(cls) span.className = cls;
+    span.textContent = text;
+    serialEl.appendChild(span);
+
+    // Ограничение буфера
+    const lines = serialEl.textContent.split('\n').length;
+    if(lines > SERIAL_MAX_LINES){
+      // удаляем старые ноды пока не станет меньше
+      while(serialEl.childNodes.length > 1 && serialEl.textContent.split('\n').length > SERIAL_MAX_LINES){
+        serialEl.removeChild(serialEl.firstChild);
+      }
+    }
+    serialEl.scrollTop = serialEl.scrollHeight;
+    const tx = document.getElementById('txLed');
+    if(tx){ tx.classList.add('active'); setTimeout(()=>tx.classList.remove('active'), 60); }
+  }
+  document.getElementById('clearSerial').addEventListener('click', ()=>{
+    serialEl.innerHTML = '<span class="muted">// вывод Serial.print появится здесь</span>';
+    loopCount = 0; loopCounterEl.textContent = 'loop: 0';
+  });
+
+  function setStatus(state, label){
+    statusDot.className = 'status-dot' + (state?(' '+state):'');
+    statusText.textContent = label;
+  }
+
+  /* ============================================================ */
+  /*                   TRANSPILER                                 */
+  /* ============================================================ */
+  function transpile(src){
+    let code = src;
+    // void func() -> function func()
+    code = code.replace(/\bvoid\s+(\w+)\s*\(/g, 'function $1(');
+    // int/long/... var -> let var
+    code = code.replace(/\b(int|long|float|double|byte|bool|boolean|char|String)\s+(?=[A-Za-z_])/g, 'let ');
+    // delay -> await delay
+    code = code.replace(/\bdelay\s*\(/g, 'await delay(');
+    // A0..A5 -> "A0".."A5"
+    code = code.replace(/\bA([0-5])\b/g, '"A$1"');
+    // setup/loop -> async function
+    code = code.replace(/\bfunction\s+setup\s*\(/, 'async function setup(');
+    code = code.replace(/\bfunction\s+loop\s*\(/, 'async function loop(');
+    return code;
+  }
+
+  function buildRunner(userCode){
+    const body = transpile(userCode) +
+      '\nreturn { setup: (typeof setup!=="undefined"?setup:null), loop: (typeof loop!=="undefined"?loop:null) };';
+
+    const paramNames = ['pinMode','digitalWrite','digitalRead','analogWrite','analogRead',
+      'delay','millis','Serial','HIGH','LOW','OUTPUT','INPUT','INPUT_PULLUP','A0','A1','A2','A3','A4','A5'];
+
+    const factory = new Function(paramNames.join(','), body);
+
+    const api = {
+      pinMode(pin, mode){ pinModes[String(pin)] = mode; },
+      digitalWrite(pin, val){
+        pin = String(pin);
+        pinStates[pin] = (val===1 || val==='HIGH' || val===true) ? 1 : 0;
+        refreshPinStrip(); updateWorkspaceStates();
+      },
+      digitalRead(pin){
+        pin = String(pin);
+        // Кнопки на пине
+        if(buttonPressed[pin]!==undefined) return buttonPressed[pin];
+        // Встроенная кнопка 13 (используется как INPUT, если так настроено)
+        if(pin==='13' && (pinModes['13']==='INPUT' || pinModes['13']==='INPUT_PULLUP')){
+          return buttonPressed['13']||0;
+        }
+        return pinModes[pin]==='INPUT_PULLUP' ? 1 : 0;
+      },
+      analogWrite(pin, val){
+        pin = String(pin);
+        pwmStates[pin] = Math.max(0, Math.min(255, val|0));
+        if(!PWM_PINS.includes(pin)){
+          serialLog('⚠ пин '+pin+' не поддерживает ШИМ (только 3,5,6,9,10,11)\n', 'warn');
+        }
+        refreshPinStrip(); updateWorkspaceStates();
+      },
+      analogRead(pin){
+        pin = String(pin);
+        if(potValues[pin]===undefined){
+          serialLog('⚠ нет потенциометра на '+pin+'\n', 'warn');
+          return 0;
+        }
+        return potValues[pin];
+      },
+      delay(ms){
+        const gen = runGen;
+        return new Promise((resolve, reject)=>{
+          const id = setTimeout(()=>{
+            cancelHandlers = cancelHandlers.filter(h=>h!==cancelFn);
+            if(gen===runGen) resolve(); else reject(new Error('__stopped__'));
+          }, Math.max(0, ms|0));
+          const cancelFn = ()=>{ clearTimeout(id); reject(new Error('__stopped__')); };
+          cancelHandlers.push(cancelFn);
+        });
+      },
+      millis(){ return Date.now() - startTime; },
+      Serial: {
+        begin(){},
+        print(x){ serialLog(String(x)); },
+        println(x){ serialLog(String(x)+'\n'); }
+      },
+      HIGH:1, LOW:0, OUTPUT:'OUTPUT', INPUT:'INPUT', INPUT_PULLUP:'INPUT_PULLUP',
+      A0:'A0', A1:'A1', A2:'A2', A3:'A3', A4:'A4', A5:'A5'
+    };
+
+    const args = paramNames.map(n=>api[n]);
+    return factory.apply(null, args);
+  }
+
+  /* ============================================================ */
+  /*                   RUNNER                                     */
+  /* ============================================================ */
+  async function runProgram(){
+    let entry;
+    try{
+      entry = buildRunner(codeEl.value);
+    }catch(e){
+      setStatus('error','ошибка синтаксиса');
+      serialLog('Ошибка компиляции: '+e.message+'\n', 'err');
+      running = false; runBtn.disabled=false; stopBtn.disabled=true;
+      return;
+    }
+    if(!entry.setup && !entry.loop){
+      setStatus('error','нет setup()/loop()');
+      serialLog('Не найдены функции setup() и loop()\n', 'err');
+      running = false; runBtn.disabled=false; stopBtn.disabled=true;
+      return;
+    }
+
+    startTime = Date.now();
+    loopCount = 0; loopCounterEl.textContent = 'loop: 0';
+    setStatus('running','выполняется');
+
+    try{
+      if(entry.setup) await entry.setup();
+    }catch(e){
+      if(e.message!=='__stopped__'){
+        setStatus('error','ошибка в setup()');
+        serialLog('Ошибка в setup(): '+e.message+'\n','err');
+      }
+      running=false; runBtn.disabled=false; stopBtn.disabled=true;
+      return;
+    }
+
+    while(running){
+      try{
+        if(entry.loop){
+          await entry.loop();
+          loopCount++;
+          if(loopCount % 10 === 0) loopCounterEl.textContent = 'loop: ' + loopCount;
+        } else break;
+      }catch(e){
+        if(e.message!=='__stopped__'){
+          setStatus('error','ошибка в loop()');
+          serialLog('Ошибка в loop(): '+e.message+'\n','err');
+        }
+        break;
+      }
+      // Даём браузеру дышать
+      await new Promise(r=>setTimeout(r,0));
+    }
+    loopCounterEl.textContent = 'loop: ' + loopCount;
+    if(running){ running=false; setStatus(null,'остановлено'); }
+    runBtn.disabled=false; stopBtn.disabled=true;
+  }
+
+  runBtn.addEventListener('click', ()=>{
+    if(running) return;
+    running = true; runGen++;
+    cancelHandlers = [];
+    runBtn.disabled = true; stopBtn.disabled = false;
+    runProgram();
+  });
+  stopBtn.addEventListener('click', ()=>{
+    running = false;
+    cancelHandlers.forEach(fn=>fn()); cancelHandlers = [];
+    setStatus(null,'остановлено');
+    runBtn.disabled=false; stopBtn.disabled=true;
+  });
+
+  codeEl.addEventListener('keydown', (e)=>{
+    if((e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); if(!running) runBtn.click(); }
+    if(e.key==='Tab'){ e.preventDefault();
+      const s=codeEl.selectionStart, en=codeEl.selectionEnd;
+      codeEl.value = codeEl.value.slice(0,s)+'  '+codeEl.value.slice(en);
+      codeEl.selectionStart = codeEl.selectionEnd = s+2;
+    }
+  });
+
+  /* ============================================================ */
+  /*                   EXAMPLES                                   */
+  /* ============================================================ */
+  const EXAMPLES = {
+    blink: {
+      code: 'void setup() {\n  pinMode(13, OUTPUT);\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  digitalWrite(13, HIGH);\n  Serial.println("LED: ON");\n  delay(500);\n  digitalWrite(13, LOW);\n  Serial.println("LED: OFF");\n  delay(500);\n}',
+      setup(){ resetComponents(); addComponent('led','13','yellow'); }
+    },
+    button: {
+      code: 'void setup() {\n  pinMode(13, OUTPUT);\n  pinMode(2, INPUT);\n}\n\nvoid loop() {\n  int pressed = digitalRead(2);\n  if (pressed == HIGH) {\n    digitalWrite(13, HIGH);\n  } else {\n    digitalWrite(13, LOW);\n  }\n  delay(20);\n}',
+      setup(){ resetComponents(); addComponent('led','13','green'); addComponent('button','2',null); }
+    },
+    pot: {
+      code: 'void setup() {\n  pinMode(9, OUTPUT);\n}\n\nvoid loop() {\n  int level = analogRead(A0);\n  int brightness = level / 4;\n  analogWrite(9, brightness);\n  delay(30);\n}',
+      setup(){ resetComponents(); addComponent('led','9','blue'); addComponent('pot','A0',null); }
+    },
+    fade: {
+      code: 'void setup() {\n  pinMode(9, OUTPUT);\n}\n\nvoid loop() {\n  for (int i = 0; i <= 255; i += 5) {\n    analogWrite(9, i);\n    delay(15);\n  }\n  for (int i = 255; i >= 0; i -= 5) {\n    analogWrite(9, i);\n    delay(15);\n  }\n}',
+      setup(){ resetComponents(); addComponent('led','9','red'); }
+    },
+    millis: {
+      code: 'int ledState = LOW;\nunsigned long previousMillis = 0;\nconst long interval = 500;\n\nvoid setup() {\n  pinMode(13, OUTPUT);\n}\n\nvoid loop() {\n  unsigned long currentMillis = millis();\n  if (currentMillis - previousMillis >= interval) {\n    previousMillis = currentMillis;\n    if (ledState == LOW) ledState = HIGH;\n    else ledState = LOW;\n    digitalWrite(13, ledState);\n  }\n}',
+      setup(){ resetComponents(); addComponent('led','13','green'); }
+    },
+    serial: {
+      code: 'int counter = 0;\n\nvoid setup() {\n  Serial.begin(9600);\n  Serial.println("PinLab готов");\n}\n\nvoid loop() {\n  counter = counter + 1;\n  Serial.print("Тик #");\n  Serial.println(counter);\n  delay(1000);\n}',
+      setup(){ resetComponents(); }
+    }
+  };
+
+  function resetComponents(){
+    components = [];
+    pinStates = {}; pwmStates = {}; buttonPressed = {};
+  }
+
+  document.getElementById('examples').addEventListener('change', (e)=>{
+    const key = e.target.value;
+    if(!key) return;
+    const ex = EXAMPLES[key];
+    running=false;
+    cancelHandlers.forEach(fn=>fn()); cancelHandlers = [];
+    runBtn.disabled=false; stopBtn.disabled=true; setStatus(null,'остановлено');
+    ex.setup();
+    codeEl.value = ex.code;
+    renderWorkspace(); refreshPinStrip();
+    e.target.value = '';
+  });
+
+  /* ============================================================ */
+  /*                   TOOLBAR: COPY / EXPORT / IMPORT            */
+  /* ============================================================ */
+  document.getElementById('copyCode').addEventListener('click', async ()=>{
+    try{
+      await navigator.clipboard.writeText(codeEl.value);
+      serialLog('// скетч скопирован в буфер\n', 'muted');
+    }catch(e){
+      serialLog('// не удалось скопировать: '+e.message+'\n', 'err');
+    }
+  });
+  document.getElementById('exportCode').addEventListener('click', ()=>{
+    const blob = new Blob([codeEl.value], {type:'text/plain'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'sketch.ino';
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  });
+  const fileInput = document.getElementById('fileInput');
+  document.getElementById('importCode').addEventListener('click', ()=>fileInput.click());
+  fileInput.addEventListener('change', ()=>{
+    const f = fileInput.files[0];
+    if(!f) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{ codeEl.value = reader.result; serialLog('// скетч загружен: '+f.name+'\n', 'muted'); };
+    reader.readAsText(f);
+    fileInput.value = '';
+  });
+
+  /* ============================================================ */
+  /*                   INIT                                       */
+  /* ============================================================ */
+  addComponent('led','13','yellow');
+  codeEl.value = EXAMPLES.blink.code;
+  refreshPinStrip();
+})();
+</script>
+</body>
+</html>
